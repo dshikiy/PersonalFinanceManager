@@ -21,6 +21,14 @@ public class Transaction {
         return isIncome;
     }
 
+    public String getCategory() {
+        return category;
+    }
+
+    public String getDate() {
+        return date;
+    }
+
     @Override
     public String toString() {
         String type = isIncome ? "[КІРІС]" : "[ШЫҒЫС]";

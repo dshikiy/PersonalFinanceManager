@@ -1,7 +1,6 @@
 package kz.yessenov.finance.service;
 
 import kz.yessenov.finance.model.Transaction;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
@@ -9,7 +8,8 @@ public class FinanceTracker {
     private List<Transaction> transactions;
 
     public FinanceTracker() {
-        this.transactions = new ArrayList<>();
+        // ӨЗГЕРІС: Бағдарлама іске қосылғанда файлдан (transactions.txt) мәліметтерді жүктейді
+        this.transactions = FileService.loadTransactions();
     }
 
     // Транзакция қосу (Кіріс немесе Шығыс)
@@ -29,6 +29,9 @@ public class FinanceTracker {
 
         Transaction transaction = new Transaction(amount, category, date, isIncome);
         transactions.add(transaction);
+        
+        // ӨЗГЕРІС: Жаңа транзакция қосылған бойда оны файлға сақтаймыз
+        FileService.saveTransactions(transactions);
         
         System.out.println("✅ Транзакция сәтті сақталды!\n");
     }
