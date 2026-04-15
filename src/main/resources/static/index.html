@@ -245,7 +245,9 @@
 </div>
 
 <script>
-    const API = "http://localhost:8080/api/finance";
+    // --- ДИНАМИКАЛЫҚ API СІЛТЕМЕСІ ---
+    // Бұл жол localhost-та да, Render-де де автоматты түрде дұрыс адресті табады
+    const API = window.location.origin + "/api/finance";
 
     // --- Tab Switcher ---
     function tab(id, el) {
@@ -263,8 +265,8 @@
         try {
             const res = await fetch(`${API}/balance`);
             const data = await res.json();
-            document.getElementById("totalBalance").innerText = new Intl.NumberFormat().format(data.balance);
-        } catch(e) { console.log("Offline mode balance"); }
+            document.getElementById("totalBalance").innerText = new Intl.NumberFormat().format(data.balance || 0);
+        } catch(e) { console.log("Байланыс қатесі: Баланс жүктелмеді"); }
     }
 
     async function loadRates() {
@@ -284,10 +286,12 @@
             category: document.getElementById("txCat").value,
             income: document.getElementById("txType").value === "income"
         };
-        await fetch(`${API}/add`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
-        e.target.reset();
-        loadBalance();
-        alert("Сақталды!");
+        try {
+            await fetch(`${API}/add`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+            e.target.reset();
+            loadBalance();
+            alert("Операция сақталды!");
+        } catch(e) { alert("Серверге сақтау мүмкін болмады"); }
     };
 
     // --- Debt Logic ---
@@ -302,7 +306,7 @@
                     <div style="color:${d.type==='lent'?'#10b981':'#ef4444'}; font-weight:700">${d.amount} ₸</div>
                 </div>
             `).join('');
-        } catch(e) { document.getElementById("debtList").innerHTML = "Деректер табылмады"; }
+        } catch(e) { document.getElementById("debtList").innerHTML = "<p style='text-align:center; color:gray'>Тізім бос</p>"; }
     }
 
     document.getElementById("debtForm").onsubmit = async (e) => {
@@ -312,9 +316,11 @@
             amount: document.getElementById("debtAmount").value,
             type: document.getElementById("debtRole").value
         };
-        await fetch(`${API}/debts`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
-        e.target.reset();
-        loadDebts();
+        try {
+            await fetch(`${API}/debts`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+            e.target.reset();
+            loadDebts();
+        } catch(e) { alert("Қарызды сақтау мүмкін болмады"); }
     };
 
     // --- Calculator ---
@@ -364,21 +370,35 @@
     // --- AI Chat ---
     async function sendMsg() {
         const inp = document.getElementById("chatInp");
-        const msg = inp.value; if(!msg) return;
+        const msg = inp.value.trim(); 
+        if(!msg) return;
+
         const box = document.getElementById("chatBox");
         box.innerHTML += `<div class="msg msg-user">${msg}</div>`;
         inp.value = "";
         box.scrollTop = box.scrollHeight;
 
         try {
-            const res = await fetch(`${API}/chat`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({message:msg})});
+            const res = await fetch(`${API}/chat`, { 
+                method:"POST", 
+                headers:{"Content-Type":"application/json"}, 
+                body:JSON.stringify({message:msg})
+            });
             const data = await res.json();
-            box.innerHTML += `<div class="msg msg-ai">${data.reply}</div>`;
+            
+            // Жауап data.reply немесе data.response болып келуі мүмкін
+            const reply = data.reply || data.response || "Жауап табылмады...";
+            box.innerHTML += `<div class="msg msg-ai">${reply}</div>`;
         } catch(e) {
             box.innerHTML += `<div class="msg msg-ai" style="color:red">Сервермен байланыс жоқ...</div>`;
         }
         box.scrollTop = box.scrollHeight;
     }
+
+    // Enter басса чат жіберілетін ету
+    document.getElementById("chatInp").addEventListener("keypress", (e) => {
+        if (e.key === "Enter") sendMsg();
+    });
 
     window.onload = () => { loadBalance(); loadRates(); };
 </script>

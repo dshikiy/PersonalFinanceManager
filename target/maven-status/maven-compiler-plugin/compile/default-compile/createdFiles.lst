@@ -5,4 +5,3 @@ kz/yessenov/finance/model/Question.class
 kz/yessenov/finance/model/Debt.class
 kz/yessenov/finance/service/FileService.class
 kz/yessenov/finance/model/Transaction.class
-kz/yessenov/finance/FinanceController.class
