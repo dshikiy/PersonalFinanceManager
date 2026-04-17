@@ -134,9 +134,22 @@
 </head>
 <body>
 
+<div id="auth-screen" style="position: fixed; top:0; left:0; width:100%; height:100%; background: var(--bg-body); z-index: 9999; display: flex; justify-content: center; align-items: center;">
+    <div class="app-container" style="height: auto; padding: 40px 20px; text-align: center; box-sizing: border-box;">
+        <h1 style="color: var(--primary); font-size: 28px; margin-bottom: 5px;"><i class="fa-solid fa-wallet"></i> FinSmart</h1>
+        <p style="color: var(--text-muted); margin-bottom: 30px;">Жеке қаржыңызды басқарыңыз</p>
+        
+        <input type="text" id="loginName" placeholder="Атыңызды енгізіңіз (мысалы: Асан)" style="text-align: center; font-size: 16px;">
+        <input type="password" id="loginPin" placeholder="ПИН код (мысалы: 1234)" style="text-align: center; font-size: 16px;">
+        
+        <button onclick="loginUser()" class="btn btn-primary" style="margin-top: 10px;">Кіру</button>
+        <p id="authError" style="color: var(--danger); font-size: 13px; margin-top: 15px; display: none;">Қате ПИН-код немесе есім өте қысқа!</p>
+    </div>
+</div>
+
 <div class="app-container">
     <div class="header">
-        <h2>FinSmart AI</h2>
+        <h2 id="headerTitle">FinSmart AI</h2>
         <div class="exchange-rate" id="rateBox">
             <i class="fa-solid fa-dollar-sign"></i> 1 USD = ... ₸
         </div>
@@ -159,6 +172,10 @@
                 </select>
                 <button type="submit" class="btn btn-primary">Сақтау</button>
             </form>
+
+            <h3 style="font-size: 16px; margin: 25px 0 12px;">Соңғы операциялар</h3>
+            <div id="txList" style="display: flex; flex-direction: column; gap: 10px;">
+                </div>
         </div>
 
         <div id="screen-debt" class="screen">
@@ -246,8 +263,33 @@
 
 <script>
     // --- ДИНАМИКАЛЫҚ API СІЛТЕМЕСІ ---
-    // Бұл жол localhost-та да, Render-де де автоматты түрде дұрыс адресті табады
     const API = window.location.origin + "/api/finance";
+
+    // --- Авторизация логикасы ---
+    function loginUser() {
+        const name = document.getElementById("loginName").value.trim();
+        const pin = document.getElementById("loginPin").value.trim();
+        const errorText = document.getElementById("authError");
+
+        if(name.length < 2) {
+            errorText.style.display = "block";
+            return;
+        }
+
+        // Бұл жерде ПИН код тек 1234 болса немесе 4 саннан көп болса кіргізеді
+        if(pin === "1234" || pin.length >= 4) {
+            document.getElementById("auth-screen").style.display = "none";
+            document.getElementById("headerTitle").innerText = `Сәлем, ${name}!`;
+            
+            // Жобаға кірген соң барлық деректерді жүктейміз
+            loadBalance();
+            loadRates();
+            loadTransactions();
+            loadDebts();
+        } else {
+            errorText.style.display = "block";
+        }
+    }
 
     // --- Tab Switcher ---
     function tab(id, el) {
@@ -255,7 +297,7 @@
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         document.getElementById(id).classList.add('active');
         el.classList.add('active');
-        if(id === 'screen-home') loadBalance();
+        if(id === 'screen-home') { loadBalance(); loadTransactions(); }
         if(id === 'screen-debt') loadDebts();
         if(id === 'screen-quiz') initQuiz();
     }
@@ -273,16 +315,40 @@
         try {
             const res = await fetch(`${API}/currency`);
             const data = await res.json();
-            document.getElementById("rateBox").innerHTML = `<i class="fa-solid fa-dollar-sign"></i> 1 USD = <b>${data["Шынайы_USD_KZT"] || 476.2}</b> ₸`;
+            document.getElementById("rateBox").innerHTML = `<i class="fa-solid fa-dollar-sign"></i> 1 USD = <b>${data["USD_KZT"] || 476.2}</b> ₸`;
         } catch(e) { 
             document.getElementById("rateBox").innerHTML = `<i class="fa-solid fa-dollar-sign"></i> 1 USD = 475.5 ₸`;
         }
     }
 
+    // --- Транзакция журналы ---
+    async function loadTransactions() {
+        try {
+            const res = await fetch(`${API}/transactions`);
+            const txs = await res.json();
+            const box = document.getElementById("txList");
+            
+            if (!txs || txs.length === 0) {
+                box.innerHTML = "<p style='text-align:center; color:gray; font-size:12px;'>Журнал бос</p>";
+                return;
+            }
+            
+            // Жаңа операциялар жоғарыда тұруы үшін reverse() жасаймыз
+            box.innerHTML = txs.slice().reverse().map(t => `
+                <div class="card" style="padding: 15px; margin-bottom: 0; display:flex; justify-content:space-between; align-items:center; border-left: 5px solid ${t.income ? 'var(--success)' : 'var(--danger)'}">
+                    <div><b>${t.category}</b><br><small style="color:gray; font-size:10px;">${t.date || ''}</small></div>
+                    <div style="color:${t.income ? 'var(--success)' : 'var(--danger)'}; font-weight:700">
+                        ${t.income ? '+' : '-'}${t.amount} ₸
+                    </div>
+                </div>
+            `).join('');
+        } catch(e) { console.log("Журнал жүктелмеді"); }
+    }
+
     document.getElementById("txForm").onsubmit = async (e) => {
         e.preventDefault();
         const body = {
-            amount: document.getElementById("txAmount").value,
+            amount: parseFloat(document.getElementById("txAmount").value), // parseFloat қатені болдырмайды
             category: document.getElementById("txCat").value,
             income: document.getElementById("txType").value === "income"
         };
@@ -290,7 +356,7 @@
             await fetch(`${API}/add`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
             e.target.reset();
             loadBalance();
-            alert("Операция сақталды!");
+            loadTransactions(); // Операцияны қосқан соң журналды бірден жаңарту
         } catch(e) { alert("Серверге сақтау мүмкін болмады"); }
     };
 
@@ -300,20 +366,24 @@
             const res = await fetch(`${API}/debts`);
             const debts = await res.json();
             const box = document.getElementById("debtList");
+            if(debts.length === 0) {
+                box.innerHTML = "<p style='text-align:center; color:gray'>Тізім бос</p>";
+                return;
+            }
             box.innerHTML = debts.map(d => `
                 <div class="card" style="display:flex; justify-content:space-between; align-items:center; border-left: 5px solid ${d.type==='lent'?'#10b981':'#ef4444'}">
                     <div><b>${d.name}</b><br><small style="color:gray">${d.type==='lent'?'Маған қайтаруы тиіс':'Беруім керек'}</small></div>
                     <div style="color:${d.type==='lent'?'#10b981':'#ef4444'}; font-weight:700">${d.amount} ₸</div>
                 </div>
             `).join('');
-        } catch(e) { document.getElementById("debtList").innerHTML = "<p style='text-align:center; color:gray'>Тізім бос</p>"; }
+        } catch(e) { document.getElementById("debtList").innerHTML = "<p style='text-align:center; color:gray'>Қате шықты</p>"; }
     }
 
     document.getElementById("debtForm").onsubmit = async (e) => {
         e.preventDefault();
         const body = {
             name: document.getElementById("debtName").value,
-            amount: document.getElementById("debtAmount").value,
+            amount: parseFloat(document.getElementById("debtAmount").value), // parseFloat қосылды
             type: document.getElementById("debtRole").value
         };
         try {
@@ -386,7 +456,6 @@
             });
             const data = await res.json();
             
-            // Жауап data.reply немесе data.response болып келуі мүмкін
             const reply = data.reply || data.response || "Жауап табылмады...";
             box.innerHTML += `<div class="msg msg-ai">${reply}</div>`;
         } catch(e) {
@@ -395,12 +464,10 @@
         box.scrollTop = box.scrollHeight;
     }
 
-    // Enter басса чат жіберілетін ету
     document.getElementById("chatInp").addEventListener("keypress", (e) => {
         if (e.key === "Enter") sendMsg();
     });
 
-    window.onload = () => { loadBalance(); loadRates(); };
 </script>
 
 </body>
